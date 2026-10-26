@@ -1,0 +1,10 @@
+{
+  "name": "job-portal-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix template run dev",
+    "build": "npm --prefix template run build",
+    "preview": "npm --prefix template run preview"
+  }
+}
