@@ -16,7 +16,7 @@ import Profile from './pages/common/Profile';
 import Unauthorized from './pages/common/Unauthorized';
 import NotFound from './pages/common/NotFound';
 
-// Protected App Layout with Sidebar Navigation
+// Protected App Layout with Sidebar Navigation (Edge-to-Edge)
 const AppDashboardLayout = () => (
   <DashboardLayout>
     <Outlet />
@@ -27,7 +27,7 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Authentication Pages (Glassmorphic Design) */}
+        {/* Public Authentication Pages (Glassmorphic Design in Login Theme) */}
         <Route
           path="/"
           element={
@@ -61,7 +61,7 @@ function App() {
           }
         />
 
-        {/* Protected Routes with Sidebar Layout */}
+        {/* Protected Dashboard Module Routes (Edge-to-Edge Sidebar Layout) */}
         <Route
           element={
             <ProtectedRoute>
@@ -69,6 +69,7 @@ function App() {
             </ProtectedRoute>
           }
         >
+          {/* Candidate Routes */}
           <Route
             path="/candidate/dashboard"
             element={
@@ -78,6 +79,32 @@ function App() {
             }
           />
           <Route
+            path="/jobs"
+            element={
+              <ProtectedRoute allowedRoles={['candidate']}>
+                <CandidateDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidate/applications"
+            element={
+              <ProtectedRoute allowedRoles={['candidate']}>
+                <CandidateDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/candidate/saved"
+            element={
+              <ProtectedRoute allowedRoles={['candidate']}>
+                <CandidateDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Recruiter Routes */}
+          <Route
             path="/recruiter/dashboard"
             element={
               <ProtectedRoute allowedRoles={['recruiter']}>
@@ -85,6 +112,32 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/recruiter/post-job"
+            element={
+              <ProtectedRoute allowedRoles={['recruiter']}>
+                <RecruiterDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recruiter/manage-jobs"
+            element={
+              <ProtectedRoute allowedRoles={['recruiter']}>
+                <RecruiterDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recruiter/applicants"
+            element={
+              <ProtectedRoute allowedRoles={['recruiter']}>
+                <RecruiterDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* User Profile Route */}
           <Route path="/profile" element={<Profile />} />
         </Route>
 
