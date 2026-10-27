@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Briefcase,
   LayoutDashboard,
+  Building2,
   LogOut,
   X,
   Shield,
@@ -22,10 +23,19 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const isRecruiter = user?.role === 'recruiter';
 
-  // Navigation Links: ONLY Dashboard navigation in the sidebar as requested
-  const links = isRecruiter
-    ? [{ name: 'Dashboard', path: '/recruiter/dashboard', icon: LayoutDashboard }]
-    : [{ name: 'Dashboard', path: '/candidate/dashboard', icon: LayoutDashboard }];
+  // Navigation Links for Sidebar: Dashboard & Companies
+  const links = [
+    {
+      name: 'Dashboard',
+      path: isRecruiter ? '/recruiter/dashboard' : '/candidate/dashboard',
+      icon: LayoutDashboard,
+    },
+    {
+      name: 'Companies',
+      path: '/companies',
+      icon: Building2,
+    },
+  ];
 
   return (
     <>
@@ -102,7 +112,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Navigation Menu (Only Dashboard Navigation) */}
+        {/* Navigation Menu (Dashboard & Companies) */}
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
             Navigation Menu

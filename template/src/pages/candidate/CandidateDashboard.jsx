@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { companyService } from '../../services/companyService';
 
 const LOCAL_STORAGE_KEY = 'jps_candidate_dashboard_state';
 
@@ -136,6 +137,20 @@ const CandidateDashboard = () => {
   const totalApplicationsCount = applications.length;
   const shortlistedCount = applications.filter((a) => a.status.toLowerCase().includes('shortlist')).length;
   const totalSavedJobsCount = recommendedJobs.filter((j) => j.saved).length + 8; // base pre-saved + dynamic
+  const [companyCount, setCompanyCount] = useState(() => companyService.getCompanyCount());
+
+  // Listen to company CRUD updates (localStorage and custom events)
+  useEffect(() => {
+    const syncCompanyCount = () => {
+      setCompanyCount(companyService.getCompanyCount());
+    };
+    window.addEventListener('companies_updated', syncCompanyCount);
+    window.addEventListener('storage', syncCompanyCount);
+    return () => {
+      window.removeEventListener('companies_updated', syncCompanyCount);
+      window.removeEventListener('storage', syncCompanyCount);
+    };
+  }, []);
 
   // Persist to LocalStorage whenever state changes
   useEffect(() => {
@@ -274,8 +289,8 @@ const CandidateDashboard = () => {
         </div>
       </div>
 
-      {/* TOP 4 STATUS CARDS (Every Action Replicates Here Live!) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+      {/* TOP 5 STATUS CARDS (Every Action Replicates Here Live!) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
         {/* Status Card 1: Total Applications */}
         <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-blue-400/30 transition-all shadow-lg group">
           <div className="flex items-center justify-between">
@@ -339,6 +354,26 @@ const CandidateDashboard = () => {
             Bookmarks saved for quick apply
           </p>
         </div>
+
+        {/* Status Card 5: Partner Companies (Replicates Live on Company CRUD!) */}
+        <Link
+          to="/companies"
+          className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-blue-400/50 hover:bg-white/[0.07] transition-all shadow-lg group block cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider group-hover:text-blue-300 transition-colors">
+              Partner Companies
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 group-hover:scale-105 transition-transform">
+              <Building2 className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="mt-3 text-3xl font-black text-white">{companyCount}</p>
+          <p className="mt-1 text-[11px] text-blue-400 font-medium flex items-center gap-1">
+            <span>Explore hiring partners</span>
+            <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+          </p>
+        </Link>
       </div>
 
       {/* QUICK ACTION CARDS (All Directly Replicate in Status Cards) */}
@@ -351,7 +386,7 @@ const CandidateDashboard = () => {
           <span className="text-xs text-slate-400">Click any card to execute & update status cards</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
           {/* Quick Action 1: 1-Click Apply */}
           <button
             type="button"
@@ -419,6 +454,22 @@ const CandidateDashboard = () => {
               Attach latest resume file to active candidate portfolio
             </p>
           </button>
+
+          {/* Quick Action 5: Explore Companies */}
+          <Link
+            to="/companies"
+            className="p-4 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] backdrop-blur-xl border border-white/10 hover:border-blue-400/40 text-left transition-all shadow-md group block"
+          >
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform border border-blue-500/30">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-sm text-white group-hover:text-blue-300 transition-colors">
+              Explore Companies
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Browse top hiring organizations & opportunities
+            </p>
+          </Link>
         </div>
       </div>
 

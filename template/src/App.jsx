@@ -12,6 +12,8 @@ import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import CandidateDashboard from './pages/candidate/CandidateDashboard';
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard';
+import CompanyList from './pages/companies/CompanyList';
+import CompanyDetails from './pages/companies/CompanyDetails';
 import Profile from './pages/common/Profile';
 import Unauthorized from './pages/common/Unauthorized';
 import NotFound from './pages/common/NotFound';
@@ -136,6 +138,10 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Company Management Routes (Module 3) */}
+          <Route path="/companies" element={<CompanyList />} />
+          <Route path="/companies/:id" element={<CompanyDetails />} />
 
           {/* User Profile Route */}
           <Route path="/profile" element={<Profile />} />
