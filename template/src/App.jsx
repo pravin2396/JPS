@@ -133,8 +133,10 @@ function App() {
             }
           />
 
-          {/* Module 4: Job Posting Routes */}
+          {/* Module 4 & 5: Job Posting and Job Search Routes */}
           <Route path="/jobs" element={<JobList />} />
+          <Route path="/jobs/search" element={<JobList />} />
+          <Route path="/search" element={<JobList />} />
           <Route path="/jobs/:id" element={<JobDetails />} />
 
           {/* Company Management Routes (Module 3) */}
