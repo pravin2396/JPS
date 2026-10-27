@@ -644,6 +644,15 @@ const CandidateDashboard = () => {
               </div>
             ))}
           </div>
+
+          <Link
+            to="/jobs"
+            className="w-full py-2.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-blue-300 hover:text-white border border-white/10 transition-all flex items-center justify-center gap-1.5 mt-2"
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            Explore All Job Opportunities
+            <ArrowRight className="w-3 h-3" />
+          </Link>
         </div>
       </div>
     </div>

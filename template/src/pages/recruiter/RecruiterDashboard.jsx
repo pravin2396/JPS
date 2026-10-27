@@ -20,6 +20,7 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { companyService } from '../../services/companyService';
+import { jobService } from '../../services/jobService';
 
 const LOCAL_STORAGE_KEY = 'jps_recruiter_dashboard_state';
 
@@ -133,22 +134,26 @@ const RecruiterDashboard = () => {
   });
 
   // Calculate live dynamic metrics directly from data!
-  const activeJobsCount = jobs.filter((j) => j.status === 'Active').length;
+  const [openJobsCount, setOpenJobsCount] = useState(() => jobService.getOpenJobsCount());
+  const activeJobsCount = openJobsCount;
   const totalApplicantsCount = jobs.reduce((acc, j) => acc + j.applicantsCount, 0);
   const interviewsCount = applicants.filter((a) => a.status === 'Interview Scheduled').length + 9;
   const shortlistedCandidatesCount = applicants.filter((a) => a.status === 'Shortlisted').length + 15;
   const [companyCount, setCompanyCount] = useState(() => companyService.getCompanyCount());
 
-  // Listen to company CRUD updates (localStorage and custom events)
+  // Listen to company and job CRUD updates (localStorage and custom events)
   useEffect(() => {
-    const syncCompanyCount = () => {
+    const syncMetrics = () => {
       setCompanyCount(companyService.getCompanyCount());
+      setOpenJobsCount(jobService.getOpenJobsCount());
     };
-    window.addEventListener('companies_updated', syncCompanyCount);
-    window.addEventListener('storage', syncCompanyCount);
+    window.addEventListener('companies_updated', syncMetrics);
+    window.addEventListener('jobs_updated', syncMetrics);
+    window.addEventListener('storage', syncMetrics);
     return () => {
-      window.removeEventListener('companies_updated', syncCompanyCount);
-      window.removeEventListener('storage', syncCompanyCount);
+      window.removeEventListener('companies_updated', syncMetrics);
+      window.removeEventListener('jobs_updated', syncMetrics);
+      window.removeEventListener('storage', syncMetrics);
     };
   }, []);
 
@@ -305,9 +310,12 @@ const RecruiterDashboard = () => {
       {/* TOP 5 STATUS CARDS (Every Action Replicates Here Live!) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
         {/* Status Card 1: Active Jobs */}
-        <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-emerald-400/30 transition-all shadow-lg group">
+        <Link
+          to="/jobs"
+          className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-emerald-400/50 hover:bg-white/[0.07] transition-all shadow-lg group block cursor-pointer"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider group-hover:text-emerald-300 transition-colors">
               Active Job Openings
             </span>
             <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 group-hover:scale-105 transition-transform">
@@ -315,10 +323,11 @@ const RecruiterDashboard = () => {
             </div>
           </div>
           <p className="mt-3 text-3xl font-black text-white">{activeJobsCount}</p>
-          <p className="mt-1 text-[11px] text-emerald-400 font-medium">
-            Live tracked openings accepting CVs
+          <p className="mt-1 text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+            <span>Live tracked openings accepting CVs</span>
+            <span className="group-hover:translate-x-0.5 transition-transform">→</span>
           </p>
-        </div>
+        </Link>
 
         {/* Status Card 2: Total Applicants */}
         <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-blue-400/30 transition-all shadow-lg group">

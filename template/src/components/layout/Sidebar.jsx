@@ -23,12 +23,17 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const isRecruiter = user?.role === 'recruiter';
 
-  // Navigation Links for Sidebar: Dashboard & Companies
+  // Navigation Links for Sidebar: Dashboard, Jobs & Companies
   const links = [
     {
       name: 'Dashboard',
       path: isRecruiter ? '/recruiter/dashboard' : '/candidate/dashboard',
       icon: LayoutDashboard,
+    },
+    {
+      name: 'Jobs',
+      path: '/jobs',
+      icon: Briefcase,
     },
     {
       name: 'Companies',

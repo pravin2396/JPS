@@ -1,0 +1,1206 @@
+import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link } from 'react-router-dom';
+import {
+  Briefcase,
+  PlusCircle,
+  Search,
+  MapPin,
+  DollarSign,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  Trash2,
+  X,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+} from 'lucide-react';
+import {
+  jobService,
+  JOB_CATEGORIES,
+  EMPLOYMENT_TYPES,
+  EXPERIENCE_LEVELS,
+  JOB_STATUSES,
+} from '../../services/jobService';
+import { companyService } from '../../services/companyService';
+import { toast } from 'react-toastify';
+
+const ITEMS_PER_PAGE = 6;
+
+const JobList = () => {
+  const [jobs, setJobs] = useState([]);
+  const [partnerCompanies, setPartnerCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedType, setSelectedType] = useState('All');
+  const [selectedExperience, setSelectedExperience] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [sortBy, setSortBy] = useState('recent');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Modals state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
+  const [deletingJob, setDeletingJob] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // React Hook Form for Create Job
+  const createForm = useForm({
+    defaultValues: {
+      title: '',
+      company: '',
+      category: 'Engineering',
+      employmentType: 'Full-time',
+      experienceLevel: 'Mid Level',
+      salaryRange: '$110,000 - $140,000 / yr',
+      location: 'Remote',
+      skills: 'React.js, Tailwind CSS, JavaScript',
+      deadline: '2026-12-15',
+      status: 'Open',
+      description: '',
+      responsibilities: 'Build scalable features\nCollaborate across product teams',
+      requirements: 'Strong analytical skills\nPrior professional experience',
+    },
+  });
+
+  // React Hook Form for Edit Job
+  const editForm = useForm();
+
+  // Load jobs and companies
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [jobsData, companiesData] = await Promise.all([
+        jobService.fetchJobs(),
+        companyService.fetchCompanies(),
+      ]);
+      setJobs(jobsData);
+      setPartnerCompanies(companiesData);
+    } catch (err) {
+      console.warn('Fallback loading data:', err.message);
+      setJobs(jobService.getLocalJobs());
+      setPartnerCompanies(companyService.getLocalCompanies());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+
+    // Listen to job updates from other components
+    const handleJobsUpdated = () => {
+      setJobs(jobService.getLocalJobs());
+    };
+    window.addEventListener('jobs_updated', handleJobsUpdated);
+    window.addEventListener('storage', handleJobsUpdated);
+    return () => {
+      window.removeEventListener('jobs_updated', handleJobsUpdated);
+      window.removeEventListener('storage', handleJobsUpdated);
+    };
+  }, []);
+
+  // Set default company for create form once companies load
+  useEffect(() => {
+    if (partnerCompanies.length > 0 && !createForm.getValues('company')) {
+      createForm.setValue('company', partnerCompanies[0].name);
+    }
+  }, [partnerCompanies, createForm]);
+
+  // Set values when opening Edit modal
+  useEffect(() => {
+    if (editingJob) {
+      editForm.reset({
+        title: editingJob.title,
+        company: editingJob.company,
+        category: editingJob.category,
+        employmentType: editingJob.employmentType,
+        experienceLevel: editingJob.experienceLevel,
+        salaryRange: editingJob.salaryRange,
+        location: editingJob.location,
+        skills: Array.isArray(editingJob.skills)
+          ? editingJob.skills.join(', ')
+          : editingJob.skills,
+        deadline: editingJob.deadline,
+        status: editingJob.status,
+        description: editingJob.description,
+        responsibilities: Array.isArray(editingJob.responsibilities)
+          ? editingJob.responsibilities.join('\n')
+          : editingJob.responsibilities || '',
+        requirements: Array.isArray(editingJob.requirements)
+          ? editingJob.requirements.join('\n')
+          : editingJob.requirements || '',
+      });
+    }
+  }, [editingJob, editForm]);
+
+  // ACTION: Create Job Posting
+  const handleCreateJob = async (formData) => {
+    setIsSubmitting(true);
+    try {
+      // Find company logo if company matches a partner
+      const matchedCompany = partnerCompanies.find(
+        (c) => c.name.toLowerCase() === formData.company.toLowerCase()
+      );
+      const companyLogo = matchedCompany ? matchedCompany.logo : undefined;
+
+      const created = await jobService.createJob({
+        ...formData,
+        companyLogo,
+      });
+
+      setJobs((prev) => [created, ...prev]);
+      setShowCreateModal(false);
+      createForm.reset();
+      toast.success(
+        `Job "${created.title}" published! Replicated in Network Tab (POST 201), LocalStorage, and Dashboard (+1).`
+      );
+    } catch (err) {
+      toast.error('Failed to create job posting: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ACTION: Edit Job Posting
+  const handleEditJob = async (formData) => {
+    if (!editingJob) return;
+    setIsSubmitting(true);
+    try {
+      const updated = await jobService.updateJob(editingJob.id, formData);
+      setJobs((prev) =>
+        prev.map((j) => (String(j.id) === String(editingJob.id) ? updated : j))
+      );
+      setEditingJob(null);
+      toast.success(
+        `Job "${updated.title}" updated! Replicated in Network Tab (PUT 200) and LocalStorage.`
+      );
+    } catch (err) {
+      toast.error('Failed to update job: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ACTION: Delete Job Posting
+  const confirmDeleteJob = async () => {
+    if (!deletingJob) return;
+    setIsSubmitting(true);
+    try {
+      await jobService.deleteJob(deletingJob.id);
+      setJobs((prev) => prev.filter((j) => String(j.id) !== String(deletingJob.id)));
+      toast.info(
+        `Job "${deletingJob.title}" removed! Replicated in Network Tab (DELETE 200), LocalStorage, and Dashboard.`
+      );
+      setDeletingJob(null);
+    } catch (err) {
+      toast.error('Failed to delete job: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ACTION: Quick Toggle Status (Open <-> Closed)
+  const handleToggleStatus = async (job) => {
+    try {
+      const updated = await jobService.toggleJobStatus(job.id);
+      if (updated) {
+        setJobs((prev) =>
+          prev.map((j) => (String(j.id) === String(job.id) ? updated : j))
+        );
+        toast.info(
+          `Status changed to "${updated.status}" for "${updated.title}". Status cards synced.`
+        );
+      }
+    } catch (err) {
+      toast.error('Failed to toggle status: ' + err.message);
+    }
+  };
+
+  // FILTERING & SEARCH
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      // Search text
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const skillsString = Array.isArray(job.skills) ? job.skills.join(' ').toLowerCase() : '';
+        const matchTitle = job.title.toLowerCase().includes(query);
+        const matchCompany = job.company.toLowerCase().includes(query);
+        const matchLocation = job.location.toLowerCase().includes(query);
+        const matchSkills = skillsString.includes(query);
+        if (!matchTitle && !matchCompany && !matchLocation && !matchSkills) {
+          return false;
+        }
+      }
+
+      // Category filter
+      if (selectedCategory !== 'All' && job.category !== selectedCategory) {
+        return false;
+      }
+
+      // Employment Type filter
+      if (selectedType !== 'All' && job.employmentType !== selectedType) {
+        return false;
+      }
+
+      // Experience Level filter
+      if (selectedExperience !== 'All' && job.experienceLevel !== selectedExperience) {
+        return false;
+      }
+
+      // Job Status filter
+      if (selectedStatus !== 'All' && job.status !== selectedStatus) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [jobs, searchQuery, selectedCategory, selectedType, selectedExperience, selectedStatus]);
+
+  // SORTING
+  const sortedJobs = useMemo(() => {
+    const list = [...filteredJobs];
+    if (sortBy === 'title-asc') {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'title-desc') {
+      list.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (sortBy === 'deadline') {
+      list.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+    } else {
+      // recent
+      list.sort((a, b) => (b.id > a.id ? 1 : -1));
+    }
+    return list;
+  }, [filteredJobs, sortBy]);
+
+  // PAGINATION
+  const totalItems = sortedJobs.length;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+  const paginatedJobs = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedJobs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [sortedJobs, currentPage]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, selectedType, selectedExperience, selectedStatus, sortBy]);
+
+  // Quick stats
+  const openCount = jobs.filter((j) => j.status === 'Open').length;
+  const closedCount = jobs.filter((j) => j.status === 'Closed').length;
+
+  return (
+    <div className="w-full space-y-6">
+      {/* Edge-to-Edge Header Banner (Vertically centered title, no star-badge) */}
+      <div className="w-full rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-slate-900/80 px-6 py-6 sm:px-8 backdrop-blur-xl border border-white/15 shadow-xl relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-72 h-72 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center my-auto">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-normal">
+              Job Postings & Opportunities
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 border border-white/20 transition-all flex items-center gap-1.5"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Post New Job
+            </button>
+            <button
+              type="button"
+              onClick={loadData}
+              className="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/20 transition-all flex items-center gap-1.5"
+              title="Refresh from API"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Sync Jobs
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="w-full bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Search Box */}
+          <div className="sm:col-span-2 relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search jobs by title, company, location, skills..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm rounded-xl border border-white/15 bg-white/[0.07] text-white placeholder-slate-400 outline-none focus:border-blue-400 focus:bg-white/[0.12] transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter */}
+          <div className="relative">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-white/15 bg-[#0f142b] text-white outline-none focus:border-blue-400 cursor-pointer"
+            >
+              {JOB_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat} className="bg-[#0f142b] text-white">
+                  Category: {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Employment Type Filter */}
+          <div className="relative">
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-white/15 bg-[#0f142b] text-white outline-none focus:border-blue-400 cursor-pointer"
+            >
+              {EMPLOYMENT_TYPES.map((type) => (
+                <option key={type} value={type} className="bg-[#0f142b] text-white">
+                  Type: {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="relative">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-white/15 bg-[#0f142b] text-white outline-none focus:border-blue-400 cursor-pointer"
+            >
+              {JOB_STATUSES.map((status) => (
+                <option key={status} value={status} className="bg-[#0f142b] text-white">
+                  Status: {status}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Secondary Row: Experience Level, Sort & Active Statistics */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-300">Experience:</span>
+              <select
+                value={selectedExperience}
+                onChange={(e) => setSelectedExperience(e.target.value)}
+                className="px-2.5 py-1 rounded-lg border border-white/15 bg-[#0f142b] text-white text-xs outline-none focus:border-blue-400 cursor-pointer"
+              >
+                {EXPERIENCE_LEVELS.map((exp) => (
+                  <option key={exp} value={exp} className="bg-[#0f142b] text-white">
+                    {exp}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-slate-300">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-2.5 py-1 rounded-lg border border-white/15 bg-[#0f142b] text-white text-xs outline-none focus:border-blue-400 cursor-pointer"
+              >
+                <option value="recent" className="bg-[#0f142b] text-white">Most Recent</option>
+                <option value="title-asc" className="bg-[#0f142b] text-white">Title (A-Z)</option>
+                <option value="title-desc" className="bg-[#0f142b] text-white">Title (Z-A)</option>
+                <option value="deadline" className="bg-[#0f142b] text-white">Earliest Deadline</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <strong className="text-white">{openCount}</strong> Open
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+              <strong className="text-white">{closedCount}</strong> Closed
+            </span>
+            <span className="text-slate-400">
+              Showing <strong className="text-white">{sortedJobs.length}</strong> of{' '}
+              <strong className="text-white">{jobs.length}</strong> total positions
+            </span>
+            {(searchQuery ||
+              selectedCategory !== 'All' ||
+              selectedType !== 'All' ||
+              selectedExperience !== 'All' ||
+              selectedStatus !== 'All') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('All');
+                  setSelectedType('All');
+                  setSelectedExperience('All');
+                  setSelectedStatus('All');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-blue-300 hover:text-white transition-colors"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Loading Skeleton */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="h-80 rounded-2xl bg-white/[0.04] border border-white/10 animate-pulse p-6 space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white/10"></div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 bg-white/10 rounded w-3/4"></div>
+                  <div className="h-3 bg-white/5 rounded w-1/2"></div>
+                </div>
+              </div>
+              <div className="h-10 bg-white/5 rounded"></div>
+              <div className="h-16 bg-white/5 rounded"></div>
+            </div>
+          ))}
+        </div>
+      ) : paginatedJobs.length === 0 ? (
+        /* Empty State */
+        <div className="w-full bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-12 text-center shadow-lg space-y-3">
+          <Briefcase className="w-12 h-12 text-slate-500 mx-auto" />
+          <h3 className="text-lg font-bold text-white">No Job Postings Found</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            No job opportunities match your active filters or search terms. Try clearing filters or create a new job opening.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedCategory('All');
+              setSelectedType('All');
+              setSelectedExperience('All');
+              setSelectedStatus('All');
+            }}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-500 mt-2"
+          >
+            Reset Filters
+          </button>
+        </div>
+      ) : (
+        /* Job Cards Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+          {paginatedJobs.map((job) => {
+            const isOpen = job.status === 'Open';
+
+            return (
+              <div
+                key={job.id}
+                className="rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/10 hover:border-white/25 transition-all shadow-xl p-6 flex flex-col justify-between group hover:-translate-y-1"
+              >
+                <div className="space-y-4">
+                  {/* Top Row: Company Logo, Name & Status Badge */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={
+                          job.companyLogo ||
+                          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=200'
+                        }
+                        alt={job.company}
+                        className="w-11 h-11 rounded-xl object-cover ring-2 ring-white/15 bg-slate-900 flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-slate-400 block truncate">
+                          {job.company}
+                        </span>
+                        <h3 className="text-sm sm:text-base font-bold text-white truncate group-hover:text-blue-300 transition-colors">
+                          {job.title}
+                        </h3>
+                      </div>
+                    </div>
+
+                    {/* Status Pill Badge */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border backdrop-blur-md ${
+                          isOpen
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+                          }`}
+                        ></span>
+                        {job.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Metadata Chips: Category & Employment Type */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/20">
+                      {job.category}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/20">
+                      {job.employmentType}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                      {job.experienceLevel}
+                    </span>
+                  </div>
+
+                  {/* Core Details: Location, Salary, Deadline */}
+                  <div className="space-y-2 text-xs text-slate-300 pt-1">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                      <span className="truncate">{job.location}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <span className="font-semibold text-white">{job.salaryRange}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                      <span className="text-slate-400">
+                        Deadline:{' '}
+                        <strong className="text-slate-200 font-medium">
+                          {job.deadline}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Description snippet */}
+                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                    {job.description}
+                  </p>
+
+                  {/* Required Skills tags */}
+                  {Array.isArray(job.skills) && job.skills.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                        Required Skills:
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {job.skills.slice(0, 4).map((skill, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/5 text-slate-300 border border-white/10"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {job.skills.length > 4 && (
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium text-slate-400">
+                            +{job.skills.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card Actions Footer */}
+                <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {/* Status Toggle Quick Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStatus(job)}
+                      className={`p-1.5 rounded-lg border text-xs transition-colors ${
+                        isOpen
+                          ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
+                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      }`}
+                      title={isOpen ? 'Click to mark as Closed' : 'Click to reopen Job'}
+                    >
+                      {isOpen ? (
+                        <XCircle className="w-3.5 h-3.5" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+
+                    {/* Edit Job Button */}
+                    <button
+                      type="button"
+                      onClick={() => setEditingJob(job)}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white border border-white/10 transition-colors"
+                      title="Edit Job Posting"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Delete Job Button */}
+                    <button
+                      type="button"
+                      onClick={() => setDeletingJob(job)}
+                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 border border-rose-500/25 transition-colors"
+                      title="Delete Job Opening"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* View Details Link */}
+                  <Link
+                    to={`/jobs/${job.id}`}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/30 transition-all flex items-center gap-1"
+                  >
+                    View Details
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-white/10 text-xs text-slate-400">
+          <div>
+            Showing{' '}
+            <strong className="text-white">
+              {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+            </strong>{' '}
+            to{' '}
+            <strong className="text-white">
+              {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)}
+            </strong>{' '}
+            of <strong className="text-white">{totalItems}</strong> positions
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              className="p-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => (
+              <button
+                key={pg}
+                type="button"
+                onClick={() => setCurrentPage(pg)}
+                className={`w-8 h-8 rounded-xl text-xs font-semibold border transition-all ${
+                  currentPage === pg
+                    ? 'bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-600/30'
+                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/15'
+                }`}
+              >
+                {pg}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              className="p-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE JOB MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-[#0e1329] border border-white/20 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                  <Briefcase className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Create New Job Posting</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Publish vacancy with category, salary, deadline, and required skills
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={createForm.handleSubmit(handleCreateJob)} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Job Title */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Job Title <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...createForm.register('title', { required: 'Job title is required' })}
+                    placeholder="e.g. Senior Frontend Engineer"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                  {createForm.formState.errors.title && (
+                    <p className="text-rose-400 text-[11px] mt-0.5">
+                      {createForm.formState.errors.title.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Company Name */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Company Name <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    list="partner-companies-list"
+                    {...createForm.register('company', { required: 'Company name is required' })}
+                    placeholder="e.g. TechCorp Innovations"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                  <datalist id="partner-companies-list">
+                    {partnerCompanies.map((c) => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Job Category */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Job Category
+                  </label>
+                  <select
+                    {...createForm.register('category')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    {JOB_CATEGORIES.filter((c) => c !== 'All').map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Employment Type */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Employment Type
+                  </label>
+                  <select
+                    {...createForm.register('employmentType')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    {EMPLOYMENT_TYPES.filter((t) => t !== 'All').map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Experience Level */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Experience Level
+                  </label>
+                  <select
+                    {...createForm.register('experienceLevel')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    {EXPERIENCE_LEVELS.filter((e) => e !== 'All').map((e) => (
+                      <option key={e} value={e}>
+                        {e}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Salary Range */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Salary Range <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...createForm.register('salaryRange', { required: 'Salary range required' })}
+                    placeholder="e.g. $120,000 - $150,000 / yr"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Location <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...createForm.register('location', { required: 'Location is required' })}
+                    placeholder="e.g. Remote, US or Austin, TX"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                {/* Application Deadline */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Application Deadline <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    {...createForm.register('deadline', { required: 'Deadline is required' })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Required Skills */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Required Skills (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    {...createForm.register('skills')}
+                    placeholder="e.g. React.js, Tailwind CSS, TypeScript, Context API"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                {/* Job Status */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Job Status
+                  </label>
+                  <select
+                    {...createForm.register('status')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-medium text-slate-200 mb-1">
+                  Job Description <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  {...createForm.register('description', { required: 'Description is required' })}
+                  placeholder="Summarize the core mission and scope of this role..."
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Responsibilities */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Key Responsibilities (one per line)
+                  </label>
+                  <textarea
+                    rows={3}
+                    {...createForm.register('responsibilities')}
+                    placeholder="Enter responsibilities..."
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  ></textarea>
+                </div>
+
+                {/* Requirements */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Requirements & Qualifications (one per line)
+                  </label>
+                  <textarea
+                    rows={3}
+                    {...createForm.register('requirements')}
+                    placeholder="Enter qualifications..."
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-md border border-white/20 transition-all"
+                >
+                  {isSubmitting ? 'Publishing...' : 'Publish Job Opening'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT JOB MODAL */}
+      {editingJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-[#0e1329] border border-white/20 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Edit Job Opening</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Update vacancy specifications, skills, deadline, or status
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingJob(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={editForm.handleSubmit(handleEditJob)} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Job Title</label>
+                  <input
+                    type="text"
+                    {...editForm.register('title', { required: 'Job title is required' })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Company</label>
+                  <input
+                    type="text"
+                    {...editForm.register('company', { required: 'Company is required' })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Category</label>
+                  <select
+                    {...editForm.register('category')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    {JOB_CATEGORIES.filter((c) => c !== 'All').map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Employment Type</label>
+                  <select
+                    {...editForm.register('employmentType')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    {EMPLOYMENT_TYPES.filter((t) => t !== 'All').map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Experience Level</label>
+                  <select
+                    {...editForm.register('experienceLevel')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    {EXPERIENCE_LEVELS.filter((e) => e !== 'All').map((e) => (
+                      <option key={e} value={e}>
+                        {e}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Salary Range</label>
+                  <input
+                    type="text"
+                    {...editForm.register('salaryRange')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Location</label>
+                  <input
+                    type="text"
+                    {...editForm.register('location')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Deadline</label>
+                  <input
+                    type="date"
+                    {...editForm.register('deadline')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-slate-200 mb-1">
+                    Required Skills (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    {...editForm.register('skills')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-200 mb-1">Job Status</label>
+                  <select
+                    {...editForm.register('status')}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-[#0f142b] text-white outline-none focus:border-blue-400"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-200 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  {...editForm.register('description')}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-white/20 bg-white/[0.08] text-white outline-none focus:border-blue-400"
+                ></textarea>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingJob(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow-md border border-white/20"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      {deletingJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-[#0e1329] rounded-2xl border border-rose-500/30 p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold text-white">Delete Job Posting?</h3>
+              <p className="text-xs text-slate-300">
+                Are you sure you want to remove <strong className="text-white">{deletingJob.title}</strong> at{' '}
+                <strong className="text-white">{deletingJob.company}</strong>? This action will remove the position and update dashboard metrics.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingJob(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white rounded-xl bg-white/10 hover:bg-white/15"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={confirmDeleteJob}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-md"
+              >
+                {isSubmitting ? 'Deleting...' : 'Yes, Delete Position'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default JobList;

@@ -12,6 +12,8 @@ import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import CandidateDashboard from './pages/candidate/CandidateDashboard';
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard';
+import JobList from './pages/jobs/JobList';
+import JobDetails from './pages/jobs/JobDetails';
 import CompanyList from './pages/companies/CompanyList';
 import CompanyDetails from './pages/companies/CompanyDetails';
 import Profile from './pages/common/Profile';
@@ -81,14 +83,6 @@ function App() {
             }
           />
           <Route
-            path="/jobs"
-            element={
-              <ProtectedRoute allowedRoles={['candidate']}>
-                <CandidateDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/candidate/applications"
             element={
               <ProtectedRoute allowedRoles={['candidate']}>
@@ -118,7 +112,7 @@ function App() {
             path="/recruiter/post-job"
             element={
               <ProtectedRoute allowedRoles={['recruiter']}>
-                <RecruiterDashboard />
+                <JobList />
               </ProtectedRoute>
             }
           />
@@ -126,7 +120,7 @@ function App() {
             path="/recruiter/manage-jobs"
             element={
               <ProtectedRoute allowedRoles={['recruiter']}>
-                <RecruiterDashboard />
+                <JobList />
               </ProtectedRoute>
             }
           />
@@ -138,6 +132,10 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Module 4: Job Posting Routes */}
+          <Route path="/jobs" element={<JobList />} />
+          <Route path="/jobs/:id" element={<JobDetails />} />
 
           {/* Company Management Routes (Module 3) */}
           <Route path="/companies" element={<CompanyList />} />
