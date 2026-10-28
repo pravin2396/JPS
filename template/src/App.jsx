@@ -11,6 +11,7 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import CandidateDashboard from './pages/candidate/CandidateDashboard';
+import Applications from './pages/candidate/Applications';
 import RecruiterDashboard from './pages/recruiter/RecruiterDashboard';
 import JobList from './pages/jobs/JobList';
 import JobDetails from './pages/jobs/JobDetails';
@@ -86,7 +87,7 @@ function App() {
             path="/candidate/applications"
             element={
               <ProtectedRoute allowedRoles={['candidate']}>
-                <CandidateDashboard />
+                <Applications />
               </ProtectedRoute>
             }
           />
@@ -94,7 +95,15 @@ function App() {
             path="/candidate/saved"
             element={
               <ProtectedRoute allowedRoles={['candidate']}>
-                <CandidateDashboard />
+                <Applications />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/applications"
+            element={
+              <ProtectedRoute allowedRoles={['candidate']}>
+                <Applications />
               </ProtectedRoute>
             }
           />

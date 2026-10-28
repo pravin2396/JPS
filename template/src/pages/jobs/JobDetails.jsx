@@ -13,9 +13,11 @@ import {
   Send,
   ShieldCheck,
   XCircle,
+  Bookmark,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
 import { companyService } from '../../services/companyService';
+import { applicationService } from '../../services/applicationService';
 import { toast } from 'react-toastify';
 
 const JobDetails = () => {
@@ -26,6 +28,7 @@ const JobDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasApplied, setHasApplied] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -37,6 +40,8 @@ const JobDetails = () => {
           setError('Job posting not found or has been removed.');
         } else {
           setJob(found);
+          setHasApplied(applicationService.isJobApplied(found.id, found.title));
+          setHasSaved(applicationService.isJobSaved(found.id));
 
           // Find associated company details if available
           const companies = companyService.getLocalCompanies();
@@ -57,8 +62,8 @@ const JobDetails = () => {
     fetchDetail();
   }, [id]);
 
-  // Handle Candidate Apply
-  const handleApply = () => {
+  // Handle Candidate Apply (Axios POST + LocalStorage + Dashboard Status +1)
+  const handleApply = async () => {
     if (!job) return;
     if (job.status !== 'Open') {
       toast.warning('This position is closed and is no longer accepting applications.');
@@ -66,48 +71,52 @@ const JobDetails = () => {
     }
 
     try {
-      // Replicate in candidate dashboard storage
-      const candidateStorageKey = 'jps_candidate_dashboard_state';
-      const stored = localStorage.getItem(candidateStorageKey);
-      let candidateState = stored ? JSON.parse(stored) : { applications: [] };
-
-      // Check if already applied
-      const existing = (candidateState.applications || []).find(
-        (a) => a.title.toLowerCase() === job.title.toLowerCase()
-      );
-
-      if (existing || hasApplied) {
-        toast.info(`You have already submitted an application for ${job.title}!`);
-        setHasApplied(true);
-        return;
-      }
-
-      const newApplication = {
-        id: `app-${Date.now()}`,
+      await applicationService.applyForJob({
+        jobId: job.id,
         title: job.title,
         company: job.company,
+        companyLogo: job.companyLogo,
         location: job.location,
         salary: job.salaryRange,
-        appliedDate: 'Just now',
-        status: 'Under Review',
-        statusColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-      };
-
-      candidateState.applications = [newApplication, ...(candidateState.applications || [])];
-      localStorage.setItem(candidateStorageKey, JSON.stringify(candidateState));
-
-      // Trigger candidate dashboard sync
-      window.dispatchEvent(new Event('candidate_updated'));
-      window.dispatchEvent(new Event('storage'));
+        category: job.category,
+      });
 
       setHasApplied(true);
       toast.success(
         `Application submitted for "${job.title}"! Replicated in Dashboard Status Cards (+1).`
       );
     } catch (e) {
-      console.warn('Error applying to job:', e);
-      toast.success(`Application registered for "${job.title}"!`);
+      toast.info(e.message || `Application registered for "${job.title}"!`);
       setHasApplied(true);
+    }
+  };
+
+  // Handle Toggle Save (Axios POST/DELETE + LocalStorage + Dashboard Status)
+  const handleToggleSave = async () => {
+    if (!job) return;
+    try {
+      if (hasSaved) {
+        await applicationService.removeSavedJob(job.id);
+        setHasSaved(false);
+        toast.info(`Removed "${job.title}" from saved jobs (-1 Saved Jobs card).`);
+      } else {
+        await applicationService.saveJob({
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          companyLogo: job.companyLogo,
+          category: job.category,
+          employmentType: job.employmentType,
+          experienceLevel: job.experienceLevel,
+          salaryRange: job.salaryRange,
+          location: job.location,
+          deadline: job.deadline,
+        });
+        setHasSaved(true);
+        toast.success(`Saved "${job.title}" to bookmarks (+1 Saved Jobs card).`);
+      }
+    } catch (err) {
+      toast.error('Error updating saved state: ' + err.message);
     }
   };
 
@@ -260,8 +269,22 @@ const JobDetails = () => {
               </div>
             </div>
 
-            {/* Apply Action / Status */}
-            <div>
+            {/* Apply & Save Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleToggleSave}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-2 border ${
+                  hasSaved
+                    ? 'bg-amber-600/30 text-amber-300 border-amber-500/50'
+                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/15'
+                }`}
+                title={hasSaved ? 'Remove from Saved Jobs' : 'Save Job'}
+              >
+                <Bookmark className={`w-4 h-4 ${hasSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
+                <span>{hasSaved ? 'Saved' : 'Save Job'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleApply}

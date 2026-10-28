@@ -9,6 +9,7 @@ import {
   Shield,
   ChevronRight,
   Sparkles,
+  BookmarkCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,29 +25,57 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const isRecruiter = user?.role === 'recruiter';
 
-  // Navigation Links for Sidebar: Dashboard, Jobs / Job Search & Companies
-  const links = [
-    {
-      name: 'Dashboard',
-      path: isRecruiter ? '/recruiter/dashboard' : '/candidate/dashboard',
-      icon: LayoutDashboard,
-    },
-    {
-      name: isRecruiter ? 'Jobs' : 'Job Search',
-      path: '/jobs',
-      icon: Briefcase,
-    },
-    {
-      name: 'Companies',
-      path: '/companies',
-      icon: Building2,
-    },
-    {
-      name: 'Profile',
-      path: '/profile',
-      icon: User,
-    },
-  ];
+  // Navigation Links for Sidebar: Dashboard, Jobs / Job Search, Applications, Companies & Profile
+  const links = isRecruiter
+    ? [
+        {
+          name: 'Dashboard',
+          path: '/recruiter/dashboard',
+          icon: LayoutDashboard,
+        },
+        {
+          name: 'Jobs',
+          path: '/jobs',
+          icon: Briefcase,
+        },
+        {
+          name: 'Companies',
+          path: '/companies',
+          icon: Building2,
+        },
+        {
+          name: 'Profile',
+          path: '/profile',
+          icon: User,
+        },
+      ]
+    : [
+        {
+          name: 'Dashboard',
+          path: '/candidate/dashboard',
+          icon: LayoutDashboard,
+        },
+        {
+          name: 'Job Search',
+          path: '/jobs',
+          icon: Briefcase,
+        },
+        {
+          name: 'Applications',
+          path: '/applications',
+          icon: BookmarkCheck,
+        },
+        {
+          name: 'Companies',
+          path: '/companies',
+          icon: Building2,
+        },
+        {
+          name: 'Profile',
+          path: '/profile',
+          icon: User,
+        },
+      ];
 
   return (
     <>

@@ -19,6 +19,7 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { companyService } from '../../services/companyService';
+import { applicationService } from '../../services/applicationService';
 
 const LOCAL_STORAGE_KEY = 'jps_candidate_dashboard_state';
 
@@ -133,22 +134,34 @@ const CandidateDashboard = () => {
     return 2;
   });
 
+  const [savedJobsList, setSavedJobsList] = useState(() => {
+    return applicationService.getSavedJobs();
+  });
+
   // Calculate live dynamic metrics from applications and saved state
   const totalApplicationsCount = applications.length;
-  const shortlistedCount = applications.filter((a) => a.status.toLowerCase().includes('shortlist')).length;
-  const totalSavedJobsCount = recommendedJobs.filter((j) => j.saved).length + 8; // base pre-saved + dynamic
+  const shortlistedCount = applications.filter((a) => (a.status || '').toLowerCase().includes('shortlist')).length;
+  const totalSavedJobsCount = savedJobsList.length;
   const [companyCount, setCompanyCount] = useState(() => companyService.getCompanyCount());
 
-  // Listen to company CRUD updates (localStorage and custom events)
+  // Listen to company, applications, and saved jobs CRUD updates
   useEffect(() => {
-    const syncCompanyCount = () => {
+    const syncState = () => {
       setCompanyCount(companyService.getCompanyCount());
+      setApplications(applicationService.getAppliedJobs());
+      setSavedJobsList(applicationService.getSavedJobs());
     };
-    window.addEventListener('companies_updated', syncCompanyCount);
-    window.addEventListener('storage', syncCompanyCount);
+    window.addEventListener('companies_updated', syncState);
+    window.addEventListener('applications_updated', syncState);
+    window.addEventListener('saved_jobs_updated', syncState);
+    window.addEventListener('candidate_updated', syncState);
+    window.addEventListener('storage', syncState);
     return () => {
-      window.removeEventListener('companies_updated', syncCompanyCount);
-      window.removeEventListener('storage', syncCompanyCount);
+      window.removeEventListener('companies_updated', syncState);
+      window.removeEventListener('applications_updated', syncState);
+      window.removeEventListener('saved_jobs_updated', syncState);
+      window.removeEventListener('candidate_updated', syncState);
+      window.removeEventListener('storage', syncState);
     };
   }, []);
 
@@ -169,55 +182,64 @@ const CandidateDashboard = () => {
   }, [applications, recommendedJobs, scheduledInterviewsCount]);
 
   // ACTION 1: Apply to a job (from list or quick action)
-  const handleApplyToJob = (job) => {
+  const handleApplyToJob = async (job) => {
     if (job.applied) return;
 
-    // Create new application
-    const newApplication = {
-      id: `app-${Date.now()}`,
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      salary: job.salary,
-      appliedDate: 'Just now',
-      status: 'Under Review',
-      statusColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-    };
+    try {
+      await applicationService.applyForJob({
+        jobId: job.id,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        salary: job.salary,
+      });
 
-    setApplications((prev) => [newApplication, ...prev]);
-    setRecommendedJobs((prev) =>
-      prev.map((j) => (j.id === job.id ? { ...j, applied: true } : j))
-    );
+      setRecommendedJobs((prev) =>
+        prev.map((j) => (j.id === job.id ? { ...j, applied: true } : j))
+      );
 
-    toast.success(`Applied to ${job.title}! Applications status card updated (+1).`);
+      toast.success(`Applied to ${job.title}! Applications status card updated (+1).`);
+    } catch (err) {
+      toast.info(err.message || 'Already applied to this position.');
+    }
   };
 
   // ACTION 2: Withdraw an application (replicates in status card -1)
-  const handleWithdrawApplication = (appId, title) => {
-    setApplications((prev) => prev.filter((a) => a.id !== appId));
-    // Also reset applied status in recommended if matched
-    setRecommendedJobs((prev) =>
-      prev.map((j) => (j.title === title ? { ...j, applied: false } : j))
-    );
-    toast.info(`Application for "${title}" withdrawn. Applications count decremented (-1).`);
+  const handleWithdrawApplication = async (appId, title) => {
+    try {
+      await applicationService.withdrawApplication(appId);
+      setRecommendedJobs((prev) =>
+        prev.map((j) => (j.title === title ? { ...j, applied: false } : j))
+      );
+      toast.info(`Application for "${title}" withdrawn. Applications count decremented (-1).`);
+    } catch (err) {
+      toast.error('Failed to withdraw application: ' + err.message);
+    }
   };
 
   // ACTION 3: Bookmark / Save Job (replicates in status card)
-  const handleToggleSaveJob = (jobId, title) => {
-    setRecommendedJobs((prev) =>
-      prev.map((j) => {
-        if (j.id === jobId) {
-          const nextSaved = !j.saved;
-          if (nextSaved) {
-            toast.success(`Saved "${title}" to your bookmarks (+1 Saved Jobs card).`);
-          } else {
-            toast.info(`Removed "${title}" from bookmarks (-1 Saved Jobs card).`);
-          }
-          return { ...j, saved: nextSaved };
-        }
-        return j;
-      })
-    );
+  const handleToggleSaveJob = async (jobId, title) => {
+    const isCurrentlySaved = applicationService.isJobSaved(jobId);
+    if (isCurrentlySaved) {
+      await applicationService.removeSavedJob(jobId);
+      setRecommendedJobs((prev) =>
+        prev.map((j) => (j.id === jobId ? { ...j, saved: false } : j))
+      );
+      toast.info(`Removed "${title}" from bookmarks (-1 Saved Jobs card).`);
+    } else {
+      const rec = recommendedJobs.find((j) => j.id === jobId);
+      await applicationService.saveJob({
+        id: jobId,
+        title: title,
+        company: rec?.company || 'Partner Enterprise',
+        location: rec?.location || 'Remote',
+        salaryRange: rec?.salary || '$120,000 - $150,000',
+      });
+      setRecommendedJobs((prev) =>
+        prev.map((j) => (j.id === jobId ? { ...j, saved: true } : j))
+      );
+      toast.success(`Saved "${title}" to your bookmarks (+1 Saved Jobs card).`);
+    }
   };
 
   // QUICK ACTION: 1-Click Apply to Next Recommended Job
@@ -292,9 +314,12 @@ const CandidateDashboard = () => {
       {/* TOP 5 STATUS CARDS (Every Action Replicates Here Live!) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
         {/* Status Card 1: Total Applications */}
-        <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-blue-400/30 transition-all shadow-lg group">
+        <Link
+          to="/applications"
+          className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-blue-400/50 hover:bg-white/[0.07] transition-all shadow-lg group block cursor-pointer"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider group-hover:text-blue-300 transition-colors">
               Total Applications
             </span>
             <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 group-hover:scale-105 transition-transform">
@@ -305,7 +330,7 @@ const CandidateDashboard = () => {
           <p className="mt-1 text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
             <TrendingUp className="w-3 h-3" /> Live updated upon every submission
           </p>
-        </div>
+        </Link>
 
         {/* Status Card 2: Interviews Scheduled */}
         <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-emerald-400/30 transition-all shadow-lg group">
@@ -340,9 +365,12 @@ const CandidateDashboard = () => {
         </div>
 
         {/* Status Card 4: Saved Jobs */}
-        <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-amber-400/30 transition-all shadow-lg group">
+        <Link
+          to="/applications?tab=saved"
+          className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-5 hover:border-amber-400/50 hover:bg-white/[0.07] transition-all shadow-lg group block cursor-pointer"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider group-hover:text-amber-300 transition-colors">
               Saved Jobs
             </span>
             <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 group-hover:scale-105 transition-transform">
@@ -353,7 +381,7 @@ const CandidateDashboard = () => {
           <p className="mt-1 text-[11px] text-amber-300">
             Bookmarks saved for quick apply
           </p>
-        </div>
+        </Link>
 
         {/* Status Card 5: Partner Companies (Replicates Live on Company CRUD!) */}
         <Link
