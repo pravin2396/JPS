@@ -143,8 +143,9 @@ function App() {
           <Route path="/companies" element={<CompanyList />} />
           <Route path="/companies/:id" element={<CompanyDetails />} />
 
-          {/* User Profile Route */}
+          {/* Module 6: Candidate Profile Route */}
           <Route path="/profile" element={<Profile />} />
+          <Route path="/candidate/profile" element={<Profile />} />
         </Route>
 
         {/* Utility Routes */}

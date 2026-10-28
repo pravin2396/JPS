@@ -3,6 +3,7 @@ import {
   Briefcase,
   LayoutDashboard,
   Building2,
+  User,
   LogOut,
   X,
   Shield,
@@ -39,6 +40,11 @@ const Sidebar = ({ isOpen, onClose }) => {
       name: 'Companies',
       path: '/companies',
       icon: Building2,
+    },
+    {
+      name: 'Profile',
+      path: '/profile',
+      icon: User,
     },
   ];
 
