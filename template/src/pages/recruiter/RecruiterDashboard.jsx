@@ -16,6 +16,7 @@ import {
   Trash2,
   Award,
   Building2,
+  BarChart3,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -296,6 +297,13 @@ const RecruiterDashboard = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/reports"
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 border border-white/20 transition-all flex items-center gap-1.5"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Reports & Analytics
+            </Link>
             <Link
               to="/profile"
               className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/20 transition-all flex items-center gap-1.5 shadow-xs"

@@ -18,6 +18,7 @@ import JobDetails from './pages/jobs/JobDetails';
 import CompanyList from './pages/companies/CompanyList';
 import CompanyDetails from './pages/companies/CompanyDetails';
 import Profile from './pages/common/Profile';
+import Reports from './pages/reports/Reports';
 import Unauthorized from './pages/common/Unauthorized';
 import NotFound from './pages/common/NotFound';
 
@@ -155,6 +156,11 @@ function App() {
           {/* Module 6: Candidate Profile Route */}
           <Route path="/profile" element={<Profile />} />
           <Route path="/candidate/profile" element={<Profile />} />
+
+          {/* Module 8: Reports & Analytics Route */}
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/analytics" element={<Reports />} />
+          <Route path="/recruiter/reports" element={<Reports />} />
         </Route>
 
         {/* Utility Routes */}

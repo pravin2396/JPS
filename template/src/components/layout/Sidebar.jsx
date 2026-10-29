@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Sparkles,
   BookmarkCheck,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -25,7 +26,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const isRecruiter = user?.role === 'recruiter';
 
-  // Navigation Links for Sidebar: Dashboard, Jobs / Job Search, Applications, Companies & Profile
+  // Navigation Links for Sidebar: Dashboard, Jobs / Job Search, Applications, Companies, Reports & Profile
   const links = isRecruiter
     ? [
         {
@@ -42,6 +43,11 @@ const Sidebar = ({ isOpen, onClose }) => {
           name: 'Companies',
           path: '/companies',
           icon: Building2,
+        },
+        {
+          name: 'Reports',
+          path: '/reports',
+          icon: BarChart3,
         },
         {
           name: 'Profile',
@@ -69,6 +75,11 @@ const Sidebar = ({ isOpen, onClose }) => {
           name: 'Companies',
           path: '/companies',
           icon: Building2,
+        },
+        {
+          name: 'Reports',
+          path: '/reports',
+          icon: BarChart3,
         },
         {
           name: 'Profile',
